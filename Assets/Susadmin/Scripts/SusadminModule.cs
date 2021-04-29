@@ -14,12 +14,17 @@ public class SusadminModule : MonoBehaviour {
 	private const float WATCH_INTERVAL = .1f;
 	private const string SYSADMIN_ID = "sysadmin";
 
+	public static HashSet<string> AllViruses { get { return SusadminData.AllViruses; } }
+	public static string[] SecurityProtocolNames { get { return SusadminData.GetAllSecurityProtocolsName(); } }
+
 	private static int moduleIdCounter = 1;
 
 	public TextMesh Console;
 	public KMBombInfo Bomb;
 	public KMBombModule Module;
 	public KMSelectable Selectable;
+
+	public HashSet<string> InstalledVirusesName { get { return new HashSet<string>(installedViruses.Select(id => SusadminData.GetVirusName(id))); } }
 
 	private bool osIsBoom;
 	private bool safetyLevelIsPublic = false;
@@ -32,9 +37,12 @@ public class SusadminModule : MonoBehaviour {
 	private int linePointer = 0;
 	private int osVersion;
 	private int safetyLevel;
+	private int startingTimeInMinutes;
 	private int vulnerability;
 	private string command = "";
 	private Coroutine watchingCoroutine;
+	private int[][] virusesPower;
+	private int[][] compatibilityIndices;
 	private List<int> securityProtocols = new List<int>();
 	private List<Vector2Int> installedViruses = new List<Vector2Int>();
 	private HashSet<SusadminReflector> reflectors;
@@ -60,7 +68,7 @@ public class SusadminModule : MonoBehaviour {
 				Module.HandleStrike();
 			}
 			externalStrikesCount = expectedExternalStrikesCount;
-			if (reflectors.Count == 0) StopCoroutine(watchingCoroutine);
+			if (reflectors.Count == 0 && watchingCoroutine != null) StopCoroutine(watchingCoroutine);
 			yield return new WaitForSeconds(WATCH_INTERVAL);
 		}
 	}
@@ -68,17 +76,23 @@ public class SusadminModule : MonoBehaviour {
 	private void OnActivate() {
 		HashSet<int> securityProtocols;
 		HashSet<Vector2Int> answerExample;
-		SusadminData.Generate(out securityProtocols, out vulnerability, out safetyLevel, out answerExample);
+		SusadminData.Generate(out securityProtocols, out vulnerability, out safetyLevel, out compatibilityIndices, out virusesPower, out answerExample);
 		this.securityProtocols = securityProtocols.ToArray().Shuffle().ToList();
 		string installedSecurityProtocolNames = this.securityProtocols.Select(id => SusadminData.GetSecurityProtocolName(id)).Join(", ");
 		Debug.LogFormat("[SUSadmin #{0}] Installed security protocols: {1}", moduleId, installedSecurityProtocolNames);
 		Debug.LogFormat("[SUSadmin #{0}] Vulnerability: {1}", moduleId, vulnerability);
 		Debug.LogFormat("[SUSadmin #{0}] Safety level: {1}", moduleId, safetyLevel);
 		Debug.LogFormat("[SUSadmin #{0}] Answer example: {1}", moduleId, answerExample.Select(id => SusadminData.GetVirusName(id)).Join(", "));
-		osVersion = vulnerability - (-Bomb.GetBatteryCount() * 5 + Bomb.GetIndicators().Count() * 7 - Bomb.GetPorts().Count() * 3 - Mathf.FloorToInt(Bomb.GetTime() / 60f));
-		if (osVersion < 0 || (osVersion == 0 && Random.Range(0, 2) == 0)) osIsBoom = true;
+		int modifier = -Bomb.GetBatteryHolderCount() * 5 + Bomb.GetIndicators().Count() * 7 - Bomb.GetPortPlateCount() * 3 - startingTimeInMinutes;
+		osVersion = vulnerability - modifier;
+		if (osVersion < 0 || (osVersion == 0 && Random.Range(0, 2) == 0)) {
+			osIsBoom = true;
+			osVersion *= -1;
+		}
+		Debug.LogFormat("[SUSadmin #{0}] OS version: {1} v{2}", moduleId, osIsBoom ? "BoomOS" : "BombOS", osVersion);
 		Selectable.OnFocus += () => selected = true;
 		Selectable.OnDefocus += () => selected = false;
+		startingTimeInMinutes = Mathf.FloorToInt(Bomb.GetTime() / 60f);
 		int modulesCount = transform.parent.childCount;
 		IEnumerable<KMBombModule> modules = Enumerable.Range(0, modulesCount).Select(i => transform.parent.GetChild(i).GetComponent<KMBombModule>()).Where(m => m != null);
 		reflectors = new HashSet<SusadminReflector>(modules.Select(m => SusadminReflector.CreateReflector(m)).Where(m => m != null));
@@ -162,7 +176,25 @@ public class SusadminModule : MonoBehaviour {
 			EndCommandProcessing();
 			yield break;
 		}
-		if (Regex.IsMatch(command, @"^(install|i|add)( |$)")) {
+		if (Regex.IsMatch(command, "^info( |$)")) {
+			string[] args = command.Split(' ').Skip(1).Where(s => s != "").ToArray();
+			if (args.Length == 0) {
+				WriteLine(PrintError("ERROR") + ": invalid arguments count");
+				EndCommandProcessing();
+				yield break;
+			}
+			foreach (string virusName in args) {
+				if (!SusadminData.VirusNameExists(virusName)) {
+					WriteLine(PrintError("ERROR") + ": virus not found");
+					break;
+				}
+				Vector2Int id = SusadminData.GetVirusId(virusName);
+				WriteLine(string.Format(" {0}: ci={1}; p={2}", virusName.ToUpper(), compatibilityIndices[id.x][id.y], virusesPower[id.x][id.y]));
+			}
+			EndCommandProcessing();
+			yield break;
+		}
+		if (Regex.IsMatch(command, @"^(install|add)( |$)")) {
 			string[] args = command.Split(' ').Where(s => s != "").Skip(1).ToArray();
 			if (args.Length == 0) WriteLine(PrintError("ERROR") + ": invalid arguments count");
 			else {
@@ -202,11 +234,11 @@ public class SusadminModule : MonoBehaviour {
 				yield break;
 			}
 			yield return Loader("Activation", 4 * installedViruses.Count);
-			HashSet<int> compatibilityIndices = new HashSet<int>(installedViruses.Select(id => SusadminData.GetVirusCompatibilityIndex(id)));
+			HashSet<int> compatibilityIndices = new HashSet<int>(installedViruses.Select(id => this.compatibilityIndices[id.x][id.y]));
 			HashSet<int> sp = new HashSet<int>(securityProtocols);
 			int minCompatibilityIndex = compatibilityIndices.Min();
 			int maxCompatibilityIndex = compatibilityIndices.Max();
-			int totalPower = installedViruses.Select(id => SusadminData.GetVirusPower(id)).Sum();
+			int totalPower = installedViruses.Select(id => virusesPower[id.x][id.y]).Sum();
 			Debug.LogFormat("[SUSadmin #{0}] Submitted total power: {1}", moduleId, totalPower);
 			if (maxCompatibilityIndex - minCompatibilityIndex > vulnerability) {
 				Debug.LogFormat("[SUSadmin #{0}] Viruses conflict. Min: {1}. Max: {2}", moduleId, minCompatibilityIndex, maxCompatibilityIndex);
@@ -247,7 +279,7 @@ public class SusadminModule : MonoBehaviour {
 	}
 
 	private IEnumerator SelfDestruct() {
-		// if (!Bomb.GetSolvableModuleIDs().Contains("SouvenirModule")) yield break;
+		if (!Bomb.GetSolvableModuleIDs().Contains("SouvenirModule")) yield break;
 		linePointer = (linePointer + 1) % LINES_COUNT;
 		int secondsToTurnOffDisplay = 10;
 		for (int i = 0; i < secondsToTurnOffDisplay; i++) {
@@ -303,7 +335,7 @@ public class SusadminModule : MonoBehaviour {
 	}
 
 	private string PrintError(string str) {
-		return string.Format("<color=red>{0}</color>", str);
+		return string.Format("<color=white>{0}</color>", str);
 	}
 
 	private string PrintOSVersion() {

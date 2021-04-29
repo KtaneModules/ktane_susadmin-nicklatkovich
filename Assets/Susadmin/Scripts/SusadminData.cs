@@ -17,37 +17,18 @@ public static class SusadminData {
 		new string[SECURITY_PROTOCOLS_COUNT] { "A125", "7Z17", "50KD", "8V00", "7D2U", "C43B" },
 	};
 
-	private static readonly int[][] VirusCompatibilityIndices = new int[SECURITY_PROTOCOLS_COUNT][] {
-		new int[SECURITY_PROTOCOLS_COUNT] { 30, 85, 37, 41, 22, 80 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 99, 94, 82, 86, 99, 48 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 83, 52, 44, 57, 50, 51 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 67, 64, 12, 15, 48, 27 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 14, 33, 98, 79, 72, 46 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 74, 29, 94, 0, 9, 9 },
-	};
-
-	private static readonly int[][] VirusPowers = new int[SECURITY_PROTOCOLS_COUNT][] {
-		new int[SECURITY_PROTOCOLS_COUNT] { 50, 16, 99, 49, 82, 79 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 32, 94, 20, 12, 45, 21 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 70, 39, 38, 79, 10, 6 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 15, 77, 90, 76, 71, 32 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 74, 73, 61, 5, 18, 92 },
-		new int[SECURITY_PROTOCOLS_COUNT] { 47, 98, 24, 39, 74, 77 },
-	};
-
-	private static readonly string[] SecurityProtocolNames = new string[SECURITY_PROTOCOLS_COUNT] { "ByteDefender", "Kasperovich", "Awast", "MedicWeb", "Disco", "MOD32" };
-	private static readonly HashSet<string> AllViruses = new HashSet<string>(VirusesName.SelectMany(a => a));
 	private static readonly Dictionary<string, Vector2Int> VirusIds = new Dictionary<string, Vector2Int>();
 
 	static SusadminData() {
 		for (int i = 0; i < SECURITY_PROTOCOLS_COUNT; i++) for (int j = 0; j < SECURITY_PROTOCOLS_COUNT; j++) VirusIds.Add(VirusesName[i][j], new Vector2Int(i, j));
 	}
 
+	public static HashSet<string> AllViruses { get { return new HashSet<string>(VirusesName.SelectMany(a => a)); } }
+	public static string[] SecurityProtocolNames { get { return new[] { "ByteDefender", "Kasperovich", "Awast", "MedicWeb", "Disco", "MOD32" }; } }
+
 	public static bool VirusNameExists(string virusName) { return AllViruses.Contains(virusName.ToUpper()); }
-	public static int GetVirusCompatibilityIndex(Vector2Int id) { return VirusCompatibilityIndices[id.x][id.y]; }
-	public static int GetVirusPower(Vector2Int id) { return VirusPowers[id.x][id.y]; }
+	public static string[] GetAllSecurityProtocolsName() { return SecurityProtocolNames.Select(a => a).ToArray(); }
 	public static Vector2Int GetVirusId(string virusName) { return VirusIds[virusName.ToUpper()]; }
-	public static Vector2Int GetVirusProperties(Vector2Int id) { return new Vector2Int(GetVirusCompatibilityIndex(id), GetVirusPower(id)); }
 	public static string GetSecurityProtocolName(int id) { return SecurityProtocolNames[id]; }
 	public static string GetVirusName(Vector2Int id) { return VirusesName[id.x][id.y]; }
 
@@ -60,50 +41,65 @@ public static class SusadminData {
 		return new HashSet<Vector2Int>(notInstalledSP.Select(x => notInstalledSP.Select(y => new Vector2Int(x, y))).SelectMany(a => a));
 	}
 
-	public static int GetSafetyLevel(Vector2Int[] sortedViruses, int vulnerability, out Vector2Int exampleRange) {
+	public static int GetSafetyLevel(Vector2Int[] sortedViruses, int vulnerability, int[][] virusesPower, int[][] compatibilityIndices, out Vector2Int exampleRange) {
 		int i = 0;
 		int j = 0;
-		int temp = GetVirusPower(sortedViruses[0]);
+		int temp = virusesPower[sortedViruses[0].x][sortedViruses[0].y];
 		int safetyLevel = temp;
 		exampleRange = new Vector2Int(0, 0);
 		while (j < sortedViruses.Length) {
 			Debug.LogFormat("<SUSadmin> {0}-{1}: t:{2}; s:{3}; r:{4}-{5}", i, j, temp, safetyLevel, exampleRange.x, exampleRange.y);
-			if (GetVirusCompatibilityIndex(sortedViruses[j]) - GetVirusCompatibilityIndex(sortedViruses[i]) <= vulnerability) {
+			if (compatibilityIndices[sortedViruses[j].x][sortedViruses[j].y] - compatibilityIndices[sortedViruses[i].x][sortedViruses[i].y] <= vulnerability) {
 				if (safetyLevel < temp) {
 					safetyLevel = temp;
 					exampleRange = new Vector2Int(i, j);
 				}
 				j++;
 				if (j == sortedViruses.Length) break;
-				temp += GetVirusPower(sortedViruses[j]);
+				temp += virusesPower[sortedViruses[j].x][sortedViruses[j].y];
 				continue;
 			}
 			if (i == j) {
 				i += 1;
 				j += 1;
 				if (j == sortedViruses.Length) break;
-				temp = GetVirusPower(sortedViruses[j]);
+				temp = virusesPower[sortedViruses[j].x][sortedViruses[j].y];
 				continue;
 			}
 			i += 1;
-			temp -= GetVirusPower(sortedViruses[i]);
+			temp -= virusesPower[sortedViruses[i].x][sortedViruses[i].y];
 		}
 		return safetyLevel;
 	}
 
-	public static void Generate(out HashSet<int> securityProtocols, out int vulnerability, out int safetyLevel, out HashSet<Vector2Int> answerExample) {
+	public static void Generate(
+		out HashSet<int> securityProtocols,
+		out int vulnerability,
+		out int safetyLevel,
+		out int[][] compatibilityIndices,
+		out int[][] virusesPower,
+		out HashSet<Vector2Int> answerExample
+	) {
 		securityProtocols = GetRandomSecurityProtocols();
 		HashSet<Vector2Int> allowedViruses = GetPossibleVirusesId(securityProtocols);
+		int[][] _compatibilityIndices = Enumerable.Range(0, SECURITY_PROTOCOLS_COUNT).Select((_) => (
+			Enumerable.Range(0, SECURITY_PROTOCOLS_COUNT).Select((__) => Random.Range(10, 100)).ToArray()
+		)).ToArray();
+		int[][] _virusesPower = Enumerable.Range(0, SECURITY_PROTOCOLS_COUNT).Select((_) => (
+			Enumerable.Range(0, SECURITY_PROTOCOLS_COUNT).Select((__) => Random.Range(10, 100)).ToArray()
+		)).ToArray();
 		Vector2Int[] sortedViruses = allowedViruses.ToArray();
-		Array.Sort(sortedViruses, (a, b) => GetVirusCompatibilityIndex(a) - GetVirusCompatibilityIndex(b));
-		string debugString = sortedViruses.Select(i => string.Format("{0}: {1}", GetVirusCompatibilityIndex(i), GetVirusPower(i))).Join("\n\t");
+		Array.Sort(sortedViruses, (a, b) => _compatibilityIndices[a.x][a.y] - _compatibilityIndices[b.x][b.y]);
+		string debugString = sortedViruses.Select(i => string.Format("{0}: {1}", _compatibilityIndices[i.x][i.y], _virusesPower[i.x][i.y])).Join("\n\t");
 		Debug.LogFormat("<SUSadmin> possible viruses:\n\t{0}", debugString);
-		int leftVulnerability = GetVirusCompatibilityIndex(sortedViruses[(sortedViruses.Length - 1) / 2]) - GetVirusCompatibilityIndex(sortedViruses[0]);
-		int rightVulnerability = GetVirusCompatibilityIndex(sortedViruses.Last()) - GetVirusCompatibilityIndex(sortedViruses[sortedViruses.Length / 2]);
-		vulnerability = Random.Range(Mathf.Min(leftVulnerability, rightVulnerability), Mathf.Max(leftVulnerability, rightVulnerability) + 1);
+		int minCompatibilityIndex = _compatibilityIndices[sortedViruses[0].x][sortedViruses[0].y];
+		int maxCompatibilityIndex = _compatibilityIndices[sortedViruses[sortedViruses.Length - 1].x][sortedViruses[sortedViruses.Length - 1].y];
+		vulnerability = Random.Range(0, maxCompatibilityIndex - minCompatibilityIndex);
 		Vector2Int answerExampleRange;
-		safetyLevel = GetSafetyLevel(sortedViruses, vulnerability, out answerExampleRange);
+		safetyLevel = GetSafetyLevel(sortedViruses, vulnerability, _virusesPower, _compatibilityIndices, out answerExampleRange);
 		answerExample = new HashSet<Vector2Int>(Enumerable.Range(answerExampleRange.x, answerExampleRange.y - answerExampleRange.x + 1).Select(i => sortedViruses[i]));
+		compatibilityIndices = _compatibilityIndices;
+		virusesPower = _virusesPower;
 	}
 
 	public static HashSet<int> GetRandomSecurityProtocols(int count = INSTALLED_SECURITY_PROTOCOLS_COUNT) {
