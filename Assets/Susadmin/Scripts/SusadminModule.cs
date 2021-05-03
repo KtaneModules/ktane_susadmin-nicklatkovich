@@ -59,6 +59,10 @@ public class SusadminModule : MonoBehaviour {
 	}
 
 	private IEnumerator Watch() {
+		yield return null;
+		int modulesCount = transform.parent.childCount;
+		IEnumerable<KMBombModule> modules = Enumerable.Range(0, modulesCount).Select(i => transform.parent.GetChild(i).GetComponent<KMBombModule>()).Where(m => m != null);
+		reflectors = new HashSet<SusadminReflector>(modules.Select(m => SusadminReflector.CreateReflector(m)).Where(m => m != null));
 		while (!solved) {
 			HashSet<SusadminReflector> reflectorsWithStrike = new HashSet<SusadminReflector>(reflectors.Where(r => r.ShouldStrike()));
 			int expectedExternalStrikesCount = reflectorsWithStrike.Count();
@@ -96,9 +100,6 @@ public class SusadminModule : MonoBehaviour {
 		Selectable.OnFocus += () => selected = true;
 		Selectable.OnDefocus += () => selected = false;
 		startingTimeInMinutes = Mathf.FloorToInt(Bomb.GetTime() / 60f);
-		int modulesCount = transform.parent.childCount;
-		IEnumerable<KMBombModule> modules = Enumerable.Range(0, modulesCount).Select(i => transform.parent.GetChild(i).GetComponent<KMBombModule>()).Where(m => m != null);
-		reflectors = new HashSet<SusadminReflector>(modules.Select(m => SusadminReflector.CreateReflector(m)).Where(m => m != null));
 		watchingCoroutine = StartCoroutine(Watch());
 		readyToWrite = true;
 		UpdateConsole();
