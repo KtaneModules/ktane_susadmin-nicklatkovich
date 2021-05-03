@@ -213,7 +213,7 @@ public class NotMorseCodeSusadminReflector : SusadminReflector {
 }
 
 public class ColoredSquaresSusadminReflector : SusadminReflector {
-	private string componentName;
+	public readonly string componentName;
 	private Component comp;
 	private FieldInfo fldColors;
 	public ColoredSquaresSusadminReflector(KMBombModule module, string componentName) : base(module.ModuleType) {
@@ -224,7 +224,7 @@ public class ColoredSquaresSusadminReflector : SusadminReflector {
 	protected override bool Exec() {
 		int[] colors = fldColors.GetValue(comp) as int[];
 		if (colors == null) throw new Exception("colors are null");
-		Debug.LogFormat(string.Format("<SUSadmin> {0} colors are: {1}", componentName, colors.Select(i => i.ToString()).Join(",")));
+		// Debug.LogFormat(string.Format("<SUSadmin> {0} colors are: {1}", componentName, colors.Select(i => i.ToString()).Join(",")));
 		return colors.Any(i => i == 1);
 	}
 }

@@ -80,6 +80,9 @@ public class SusadminModule : MonoBehaviour {
 		this.securityProtocols = securityProtocols.ToArray().Shuffle().ToList();
 		string installedSecurityProtocolNames = this.securityProtocols.Select(id => SusadminData.GetSecurityProtocolName(id)).Join(", ");
 		Debug.LogFormat("[SUSadmin #{0}] Installed security protocols: {1}", moduleId, installedSecurityProtocolNames);
+		Debug.LogFormat("[SUSadmin #{0}] Possible viruses:\n{1}", moduleId, SusadminData.GetPossibleVirusesId(securityProtocols).Select(
+			id => string.Format("\t{0}: ci:{1}; p:{2}", SusadminData.GetVirusName(id), compatibilityIndices[id.x][id.y], virusesPower[id.x][id.y])
+		).Join("\n"));
 		Debug.LogFormat("[SUSadmin #{0}] Vulnerability: {1}", moduleId, vulnerability);
 		Debug.LogFormat("[SUSadmin #{0}] Safety level: {1}", moduleId, safetyLevel);
 		Debug.LogFormat("[SUSadmin #{0}] Answer example: {1}", moduleId, answerExample.Select(id => SusadminData.GetVirusName(id)).Join(", "));
@@ -233,32 +236,39 @@ public class SusadminModule : MonoBehaviour {
 				EndCommandProcessing();
 				yield break;
 			}
+			if (installedViruses.Count == 0) {
+				WriteLine(PrintError("ERROR") + ": no viruses to activate");
+				EndCommandProcessing();
+				yield break;
+			}
 			yield return Loader("Activation", 4 * installedViruses.Count);
 			HashSet<int> compatibilityIndices = new HashSet<int>(installedViruses.Select(id => this.compatibilityIndices[id.x][id.y]));
 			HashSet<int> sp = new HashSet<int>(securityProtocols);
 			int minCompatibilityIndex = compatibilityIndices.Min();
 			int maxCompatibilityIndex = compatibilityIndices.Max();
 			int totalPower = installedViruses.Select(id => virusesPower[id.x][id.y]).Sum();
+			Debug.LogFormat("[SUSadmin #{0}] Submitted viruses: {1}", moduleId, InstalledVirusesName.Join(", "));
 			Debug.LogFormat("[SUSadmin #{0}] Submitted total power: {1}", moduleId, totalPower);
 			if (maxCompatibilityIndex - minCompatibilityIndex > vulnerability) {
 				Debug.LogFormat("[SUSadmin #{0}] Viruses conflict. Min: {1}. Max: {2}", moduleId, minCompatibilityIndex, maxCompatibilityIndex);
 				WriteLine(PrintError("ERROR" + ": Viruses conflict"));
 				yield return Loader(PrintError("STRIKE"));
-				WriteLine("All viruses deleted");
+				WriteLine("STRIKE");
 				Module.HandleStrike();
 			} else if (installedViruses.Any(id => !SusadminData.VirusIsInvisible(id, sp))) {
 				string detectedVirusName = SusadminData.GetVirusName(installedViruses.First(id => !SusadminData.VirusIsInvisible(id, sp)));
 				Debug.LogFormat("[SUSadmin #{0}] Virus detected: {1}", moduleId, detectedVirusName);
 				WriteLine(string.Format("{0}: Virus {1} detected", PrintError("ERROR"), PrintError(detectedVirusName)));
 				yield return Loader(PrintError("STRIKE"));
-				WriteLine("All viruses deleted");
+				WriteLine("STRIKE");
 				Module.HandleStrike();
 			} else if (totalPower < safetyLevel) {
+				Debug.LogFormat("[SUSadmin #{0}] Expected total power: {1}", moduleId, safetyLevel);
 				WriteLine(string.Format("{0}: OS detected viruses", PrintError("ERROR")));
 				WriteLine("OS safety level: " + PrintNumber(safetyLevel.ToString()));
 				safetyLevelIsPublic = true;
 				yield return Loader(PrintError("STRIKE"));
-				WriteLine("All viruses deleted");
+				WriteLine("STRIKE");
 				Module.HandleStrike();
 			} else {
 				Debug.LogFormat("[SUSadmin #{0}] Module solved", moduleId);
@@ -303,20 +313,14 @@ public class SusadminModule : MonoBehaviour {
 		if (viruses.Any(s => !SusadminData.VirusNameExists(s))) WriteLine(PrintError("ERROR") + ": virus not found");
 		else if (viruses.Any(s => installedViruses.Contains(SusadminData.GetVirusId(s)))) WriteLine(PrintError("ERROR") + ": virus already installed");
 		else if (new HashSet<string>(viruses.Select(v => v.ToUpper())).Count != viruses.Length) WriteLine(PrintError("ERROR") + ": duplicates");
-		else {
-			installedViruses.AddRange(viruses.Select(s => SusadminData.GetVirusId(s)));
-			Debug.LogFormat("[SUSadmin #{0}] Viruses installed: {1}", moduleId, viruses.Select(s => s.ToUpper()).Join(", "));
-		}
+		else installedViruses.AddRange(viruses.Select(s => SusadminData.GetVirusId(s)));
 	}
 
 	private void DeleteViruses(string[] viruses) {
 		if (viruses.Any(s => !SusadminData.VirusNameExists(s))) WriteLine(PrintError("ERROR") + ": virus not found");
 		else if (viruses.Any(s => !installedViruses.Contains(SusadminData.GetVirusId(s)))) WriteLine(PrintError("ERROR") + ": virus not installed");
 		else if (new HashSet<string>(viruses.Select(v => v.ToUpper())).Count != viruses.Length) WriteLine(PrintError("ERROR") + ": duplicates");
-		else {
-			foreach (Vector2Int id in viruses.Select(s => SusadminData.GetVirusId(s))) installedViruses.Remove(id);
-			Debug.LogFormat("[SUSadmin #{0}] Viruses deleted: {1}", moduleId, viruses.Select(s => s.ToUpper()).Join(", "));
-		}
+		else foreach (Vector2Int id in viruses.Select(s => SusadminData.GetVirusId(s))) installedViruses.Remove(id);
 	}
 
 	private void SetSecurityProtocols() {

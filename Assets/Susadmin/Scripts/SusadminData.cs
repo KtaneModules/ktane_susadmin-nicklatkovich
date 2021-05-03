@@ -66,8 +66,8 @@ public static class SusadminData {
 				temp = virusesPower[sortedViruses[j].x][sortedViruses[j].y];
 				continue;
 			}
-			i += 1;
 			temp -= virusesPower[sortedViruses[i].x][sortedViruses[i].y];
+			i += 1;
 		}
 		return safetyLevel;
 	}
