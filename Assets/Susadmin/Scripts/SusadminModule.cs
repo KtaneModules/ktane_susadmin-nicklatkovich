@@ -25,6 +25,12 @@ public class SusadminModule : MonoBehaviour {
 
 	public HashSet<string> InstalledVirusesName { get { return new HashSet<string>(installedViruses.Select(id => SusadminData.GetVirusName(id))); } }
 
+	private bool _forceSolved = true;
+	public bool forceSolved {
+		get { return _forceSolved; }
+		private set { _forceSolved = value; }
+	}
+
 	public readonly string TwitchHelpMessage = "\"!{0} command\" - Execute command";
 	public bool TwitchPlaysActive;
 
@@ -177,6 +183,16 @@ public class SusadminModule : MonoBehaviour {
 		yield return new WaitForSeconds(.2f);
 	}
 
+	public void TwitchHandleForcedSolve() {
+		Debug.LogFormat("[SUSadmin #{0}] Module force solved", moduleId);
+		WriteLine("Module force solved");
+		for (int i = 0; i < LINES_COUNT - 1; i++) WriteLine("<color=red>!!! CHEATERS !!! CHEATERS !!!</color>");
+		linePointer = linePointer == 0 ? LINES_COUNT - 1 : linePointer - 1;
+		readyToWrite = false;
+		shouldUpdateText = true;
+		solved = true;
+		Module.HandlePass();
+	}
 
 	private IEnumerator ProcessCommand() {
 		Action EndCommandProcessing = () => {
@@ -305,6 +321,7 @@ public class SusadminModule : MonoBehaviour {
 				WriteLine("STRIKE");
 				Module.HandleStrike();
 			} else {
+				forceSolved = false;
 				Debug.LogFormat("[SUSadmin #{0}] Module solved", moduleId);
 				WriteLine("Network damaged!");
 				yield return Loader("Solving module");
