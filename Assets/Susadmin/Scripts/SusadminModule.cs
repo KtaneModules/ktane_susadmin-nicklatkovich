@@ -18,13 +18,15 @@ public class SusadminModule : MonoBehaviour {
 	public static string[] SecurityProtocolNames { get { return SusadminData.GetAllSecurityProtocolsName(); } }
 
 	private static int moduleIdCounter = 1;
-
 	public TextMesh Console;
 	public KMBombInfo Bomb;
 	public KMBombModule Module;
 	public KMSelectable Selectable;
 
 	public HashSet<string> InstalledVirusesName { get { return new HashSet<string>(installedViruses.Select(id => SusadminData.GetVirusName(id))); } }
+
+	public readonly string TwitchHelpMessage = "\"!{0} command\" - Execute command";
+	public bool TwitchPlaysActive;
 
 	private bool osIsBoom;
 	private bool safetyLevelIsPublic = false;
@@ -60,6 +62,10 @@ public class SusadminModule : MonoBehaviour {
 
 	private IEnumerator Watch() {
 		yield return null;
+		if (TwitchPlaysActive) {
+			Debug.LogFormat("[SUSadmin #{0}] Reflectors are disabled because TP is active", moduleId);
+			yield break;
+		}
 		int modulesCount = transform.parent.childCount;
 		IEnumerable<KMBombModule> modules = Enumerable.Range(0, modulesCount).Select(i => transform.parent.GetChild(i).GetComponent<KMBombModule>()).Where(m => m != null);
 		reflectors = new HashSet<SusadminReflector>(modules.Select(m => SusadminReflector.CreateReflector(m)).Where(m => m != null));
@@ -118,6 +124,12 @@ public class SusadminModule : MonoBehaviour {
 		shouldUpdateText = false;
 	}
 
+	private void BeforeCommandProcessing() {
+		readyToWrite = false;
+		if (lines[linePointer].EndsWith("_</color>")) lines[linePointer] = lines[linePointer].Remove(lines[linePointer].Length - 9, 1);
+		linePointer = (linePointer + 1) % LINES_COUNT;
+	}
+
 	private bool ProcessKey(KeyCode key) {
 		Func<string, bool> UpdateCommand = (string command) => {
 			if (this.command == command) return false;
@@ -126,9 +138,7 @@ public class SusadminModule : MonoBehaviour {
 		};
 		if (!readyToWrite) return false;
 		if (key == KeyCode.Return || key == KeyCode.KeypadEnter) {
-			readyToWrite = false;
-			if (lines[linePointer].EndsWith("_</color>")) lines[linePointer] = lines[linePointer].Remove(lines[linePointer].Length - 9, 1);
-			linePointer = (linePointer + 1) % LINES_COUNT;
+			BeforeCommandProcessing();
 			StartCoroutine(ProcessCommand());
 			return true;
 		}
@@ -144,6 +154,29 @@ public class SusadminModule : MonoBehaviour {
 		}
 		return false;
 	}
+
+	public IEnumerator ProcessTwitchCommand(string command) {
+		command = command.Trim();
+		if (!Regex.IsMatch(command, @"^[ a-zA-Z0-9]+$")) yield break;
+		if (command.Length > MAX_COMMAND_LENGTH) {
+			yield return "sendtochat {0}, !{1}: Command is too long";
+			yield break;
+		}
+		if (!readyToWrite) {
+			yield return "sendtochat {0}, !{1}: Console is not active";
+			yield break;
+		}
+		readyToWrite = false;
+		yield return null;
+		this.command = command;
+		readyToWrite = true;
+		UpdateConsole();
+		BeforeCommandProcessing();
+		shouldUpdateText = true;
+		yield return ProcessCommand();
+		yield return new WaitForSeconds(.2f);
+	}
+
 
 	private IEnumerator ProcessCommand() {
 		Action EndCommandProcessing = () => {
