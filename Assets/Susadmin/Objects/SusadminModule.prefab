@@ -485,6 +485,7 @@ MonoBehaviour:
   Bomb: {fileID: 114187694831144446}
   Module: {fileID: 114494427606804748}
   Selectable: {fileID: 114271750243531152}
+  TwitchPlaysActive: 0
 --- !u!114 &114139198782396168
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -533,7 +534,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Parent: {fileID: 0}
   Children:
-  - {fileID: 0}
+  - {fileID: 114322849102460946}
   IsPassThrough: 0
   ChildRowLength: 1
   Highlight: {fileID: 114443335957272384}

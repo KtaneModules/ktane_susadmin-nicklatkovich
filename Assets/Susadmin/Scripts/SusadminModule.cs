@@ -96,14 +96,15 @@ public class SusadminModule : MonoBehaviour {
 		this.securityProtocols = securityProtocols.ToArray().Shuffle().ToList();
 		string installedSecurityProtocolNames = this.securityProtocols.Select(id => SusadminData.GetSecurityProtocolName(id)).Join(", ");
 		Debug.LogFormat("[SUSadmin #{0}] Installed security protocols: {1}", moduleId, installedSecurityProtocolNames);
-		Debug.LogFormat("[SUSadmin #{0}] Possible viruses:\n{1}", moduleId, SusadminData.GetPossibleVirusesId(securityProtocols).Select(
-			id => string.Format("\t{0}: ci:{1}; p:{2}", SusadminData.GetVirusName(id), compatibilityIndices[id.x][id.y], virusesPower[id.x][id.y])
-		).Join("\n"));
+		Debug.LogFormat("[SUSadmin #{0}] Possible viruses:", moduleId);
+		foreach (Vector2Int id in SusadminData.GetPossibleVirusesId(securityProtocols)) {
+			Debug.LogFormat("[SUSadmin #{0}] \t{1}: ci:{2}; p:{3}", moduleId, SusadminData.GetVirusName(id), compatibilityIndices[id.x][id.y], virusesPower[id.x][id.y]);
+		}
 		Debug.LogFormat("[SUSadmin #{0}] Vulnerability: {1}", moduleId, vulnerability);
 		Debug.LogFormat("[SUSadmin #{0}] Safety level: {1}", moduleId, safetyLevel);
 		Debug.LogFormat("[SUSadmin #{0}] Answer example: {1}", moduleId, answerExample.Select(id => SusadminData.GetVirusName(id)).Join(", "));
-		int modifier = -Bomb.GetBatteryHolderCount() * 5 + Bomb.GetIndicators().Count() * 7 - Bomb.GetPortPlateCount() * 3 - startingTimeInMinutes;
-		osVersion = vulnerability - modifier;
+		startingTimeInMinutes = Mathf.FloorToInt(Bomb.GetTime() / 60f);
+		osVersion = GetOSVersion(vulnerability);
 		if (osVersion < 0 || (osVersion == 0 && Random.Range(0, 2) == 0)) {
 			osIsBoom = true;
 			osVersion *= -1;
@@ -111,10 +112,20 @@ public class SusadminModule : MonoBehaviour {
 		Debug.LogFormat("[SUSadmin #{0}] OS version: {1} v{2}", moduleId, osIsBoom ? "BoomOS" : "BombOS", osVersion);
 		Selectable.OnFocus += () => selected = true;
 		Selectable.OnDefocus += () => selected = false;
-		startingTimeInMinutes = Mathf.FloorToInt(Bomb.GetTime() / 60f);
 		watchingCoroutine = StartCoroutine(Watch());
 		readyToWrite = true;
 		UpdateConsole();
+	}
+
+	private int GetOSVersion(int vulnerability) {
+		int batteryHoldersCount = Bomb.GetBatteryHolderCount();
+		int indicatorsCount = Bomb.GetIndicators().Count();
+		int portPlatesCount = Bomb.GetPortPlateCount();
+		Debug.LogFormat(
+			"[SUSadmin #{0}] OS version calculation: -{1}*5 + {2}*7 -{3}*3 - {4}", moduleId, batteryHoldersCount, indicatorsCount, portPlatesCount, startingTimeInMinutes
+		);
+		int modifier = -Bomb.GetBatteryHolderCount() * 5 + Bomb.GetIndicators().Count() * 7 - Bomb.GetPortPlateCount() * 3 - startingTimeInMinutes;
+		return vulnerability - modifier;
 	}
 
 	private void OnGUI() {
